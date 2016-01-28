@@ -1,20 +1,24 @@
 #define PI 3.14159
 
-#define GLEW_STATIC
-#include <GL/glew.h>
+#include "GL/gl3w.h"
+//#define GLEW_STATIC
+//#include "GL/glew.h"
 
-#include <GLFW/glfw3.h>
+#include "GLFW/glfw3.h"
 #include <iostream>
 
+#include<stdio.h>
 #include <math.h>
 
 #define GLM_FORCE_RADIANS
-#include <glm/glm.hpp>
-#include <glm/gtx/transform.hpp>
+#include "glm/glm.hpp"
+#include "glm/gtx/transform.hpp"
 //#include <glm/gtc/matrix_transform.hpp>
 //#include <glm/gtc/type_ptr.hpp>
 
 int shouldDraw;
+
+GLuint sprgm;
 
 int w, h;
 
@@ -28,7 +32,8 @@ void setView(){
     glm::vec3 pos = glm::vec3(0.0, 0.0, 1.0);
     view *= glm::lookAt(pos, pos + glm::vec3(0.0, 0.0, -1.0), glm::vec3(0.0, 1.0, 0.0));
 
-    glUniformMatrix4fv(6, 1, GL_FALSE, &view[0][0]);
+    GLint viewloc = glGetUniformLocation(sprgm, "view");
+    glUniformMatrix4fv(viewloc, 1, GL_FALSE, &view[0][0]);
 }
 
 static void wResize(GLFWwindow* window, int width, int height){
@@ -46,7 +51,8 @@ void setRot(float xangle, float yangle, float zangle){
         0, 0, 0, 1
     };
 
-    glUniformMatrix4fv(3, 1, GL_FALSE, zrMat);
+    GLint zrot = glGetUniformLocation(sprgm, "zrot");
+    glUniformMatrix4fv(zrot, 1, GL_FALSE, zrMat);
 
     float yrMat[] = {
         (float)cos(yangle), 0, (float)-sin(yangle), 0,
@@ -55,7 +61,8 @@ void setRot(float xangle, float yangle, float zangle){
         0, 0, 0, 1
     };
 
-    glUniformMatrix4fv(4, 1, GL_FALSE, yrMat);
+    GLint yrot = glGetUniformLocation(sprgm, "yrot");
+    glUniformMatrix4fv(yrot, 1, GL_FALSE, yrMat);
 
     float xrMat[] = {
         1, 0, 0, 0,
@@ -64,7 +71,8 @@ void setRot(float xangle, float yangle, float zangle){
         0, 0, 0, 1
     };
 
-    glUniformMatrix4fv(5, 1, GL_FALSE, xrMat);
+    GLint xrot = glGetUniformLocation(sprgm, "xrot");
+    glUniformMatrix4fv(xrot, 1, GL_FALSE, xrMat);
 }
 
 void mulFLoatArray(unsigned int aSize, float* array, float factor){
@@ -77,28 +85,43 @@ int main(int argc, char** argv){
 
     shouldDraw = 1;
 
+    //glewExperimental=GL_TRUE;
     glfwInit();
+
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
     GLFWwindow* mainWindw = glfwCreateWindow(1000, 800, "Opengl", NULL, NULL);
     w = 1000;
     h = 800;
     //GLFWwindow* mainWindw = glfwCreateWindow(1920, 1080, "Opengl", glfwGetPrimaryMonitor(), NULL);
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    if (!mainWindw) {
+        std::cout << "cant make window";
+    }
+
 
     glfwMakeContextCurrent(mainWindw);
 
-    glewInit();
-
+    //glewInit();
+    if (gl3wInit()) {
+        //printf("failed to initialize OpenGL\n");
+        return -1;
+    }
+    printf("OpenGL %s, GLSL %s\n", glGetString(GL_VERSION), glGetString(GL_SHADING_LANGUAGE_VERSION));
+    //if (gl3wIsSupported("GL_VERSION_3_0"))
+//    {
+  //      std::cout << "got ogl30\n";
+    //}
     const char* vSrc[] = {
-        "#version 440 \n \
-            layout(location=2)in vec3 position; \
-            layout(location=1)uniform float ma; \
-            layout(location=3)uniform mat4 zrot; \
-            layout(location=4)uniform mat4 yrot; \
-            layout(location=5)uniform mat4 xrot; \
-            layout(location=6)uniform mat4 view; \
+        "#version 330\n \
+            in vec3 position; \
+            uniform float ma; \
+            uniform mat4 zrot; \
+            uniform mat4 yrot; \
+            uniform mat4 xrot; \
+            uniform mat4 view; \
             out vec4 pcolor; \
             void main() \
             { \
@@ -110,7 +133,7 @@ int main(int argc, char** argv){
 
                 //color = vec4(1.0, 0.0 , 0.0, 1.0);
     const char* fSrc[] = {
-        "#version 440 \n \
+        "#version 330\n \
             out vec4 color; \
             in vec4 pcolor; \
             void main() \
@@ -126,24 +149,35 @@ int main(int argc, char** argv){
     glShaderSource(vShader, 1, vSrc, NULL);
     glShaderSource(fShader, 1, fSrc, NULL);
 
+    std::cout << "vertex\n";
     glCompileShader(vShader);
     int rv;
-    glGetShaderiv(fShader, GL_COMPILE_STATUS, &rv);
+    glGetShaderiv(vShader, GL_COMPILE_STATUS, &rv);
+    if (rv == GL_TRUE)
+    {
+        std::cout << "vert compiled\n";
+    }
     char log[4096];
-    glGetShaderInfoLog(fShader, 4096, NULL, log);
+    glGetShaderInfoLog(vShader, 4096, NULL, log);
     std::cout << log << '\n';
 
+    std::cout << "fragment\n";
     glCompileShader(fShader);
     glGetShaderiv(fShader, GL_COMPILE_STATUS, &rv);
+    if (rv == GL_TRUE)
+    {
+        std::cout << "frag compiled\n";
+    }
     glGetShaderInfoLog(fShader, 4096, NULL, log);
     std::cout << log << '\n';
 
-    GLuint sprgm = glCreateProgram();
+    sprgm = glCreateProgram();
     glAttachShader(sprgm, vShader);
     glAttachShader(sprgm, fShader);
 
     glBindFragDataLocation(sprgm, 0, "color");
 
+    std::cout << "linking\n";
     glLinkProgram(sprgm);
     glGetProgramiv(sprgm, GL_LINK_STATUS, &rv);
     glGetProgramInfoLog(sprgm, 4096, NULL, log);
@@ -174,9 +208,11 @@ int main(int argc, char** argv){
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 
-    //GLint sPos = glGetAttribLocation(sprgm, "position");
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(2);
+    GLint maloc = glGetUniformLocation(sprgm, "ma");
+
+    GLint sPos = glGetAttribLocation(sprgm, "position");
+    glVertexAttribPointer(sPos, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(sPos);
 
     unsigned int elems[] = {
         0, 1, 1, 2, 2, 3, 3, 0,
@@ -216,7 +252,7 @@ int main(int argc, char** argv){
             ma += 0.005;
             if (ma > 6.00f)
                 ma = 0.0f;
-            glUniform1f(1, ma);
+            glUniform1f(maloc, ma);
             setRot(PI/8 * ma, PI/0.3 * ma, PI/1.3 * ma);
 
             glClearColor(0.0, 0.0, 0.0, 0.0);
